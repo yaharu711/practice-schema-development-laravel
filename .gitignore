@@ -1,0 +1,10 @@
+指示書.md
+# 生成物と取得物
+/generated
+/openapi/openapi.yaml
+# Laravel（src配下）
+/src/vendor
+/src/node_modules
+/src/.env
+/src/storage
+/src/public/storage
