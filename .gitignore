@@ -1,7 +1,9 @@
 指示書.md
 # 生成物と取得物
 /generated
-/openapi/openapi.yaml
+# openapi ディレクトリは利用しない（URL直参照）
+/.env
+/docker/app.env
 # Laravel（src配下）
 /src/vendor
 /src/node_modules
