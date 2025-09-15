@@ -1,0 +1,66 @@
+name: openapi-schema-consistency
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+jobs:
+  schemathesis:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: laravel
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: app
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U laravel -d app" \
+          --health-interval=5s --health-timeout=5s --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_pgsql
+          coverage: none
+
+      - name: Install Composer deps
+        working-directory: src
+        run: composer install --no-interaction --prefer-dist
+
+      - name: App key & migrate
+        working-directory: src
+        env:
+          APP_ENV: testing
+          APP_KEY: 
+          APP_DEBUG: true
+          APP_URL: http://localhost:8000
+          DB_CONNECTION: pgsql
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_DATABASE: app
+          DB_USERNAME: laravel
+          DB_PASSWORD: secret
+        run: |
+          php artisan key:generate
+          php artisan migrate --force
+
+      - name: Start Laravel server
+        working-directory: src
+        env:
+          APP_ENV: testing
+          APP_DEBUG: true
+          DB_CONNECTION: pgsql
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_DATABASE: app
+          DB_USERNAME: laravel
+          DB_PASSWORD: secret
+        run: php -S 127.0.0.1:8000 -t public/ & sleep 3
+
+      - name: Schemathesis (schema drift detection)
+        run: make contract BASE_URL=http://127.0.0.1:8000/api
