@@ -34,7 +34,11 @@ jobs:
 
       - name: Fix permissions for storage and cache
         run: |
-          docker compose exec -T app sh -lc 'chown -R www-data:www-data storage bootstrap/cache && chmod -R ug+rwX storage bootstrap/cache'
+          docker compose exec -T app sh -lc '
+            mkdir -p /var/www/html/storage /var/www/html/bootstrap/cache && \
+            chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache && \
+            chmod -R ug+rwX /var/www/html/storage /var/www/html/bootstrap/cache
+          '
 
       - name: Prepare .env and APP_KEY
         run: |
