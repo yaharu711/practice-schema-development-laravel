@@ -1,0 +1,74 @@
+name: Contract Check
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  schemathesis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show Docker info
+        run: |
+          docker --version
+          docker compose version
+
+      - name: Build and start services
+        run: |
+          docker compose up -d --build
+
+      - name: Install PHP dependencies (Composer)
+        run: |
+          docker compose exec -T app composer install --no-interaction --prefer-dist --no-ansi --no-progress
+
+      - name: Prepare .env and APP_KEY
+        run: |
+          if [ ! -f src/.env ]; then cp src/.env.example src/.env; fi
+          docker compose exec -T app php artisan key:generate
+
+      - name: Run migrations (retry until ready)
+        run: |
+          ok=0
+          for i in {1..60}; do
+            if docker compose exec -T app php artisan migrate --force; then
+              echo "migrated"; ok=1; break
+            fi
+            echo "retry migrate... ($i)"; sleep 2
+          done
+          if [ "$ok" -ne 1 ]; then echo "migration failed" >&2; exit 1; fi
+
+      - name: Wait for web (HTTP 200)
+        run: |
+          for i in {1..60}; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/ || true)
+            if [ "$code" = "200" ]; then echo "web 200 OK"; break; fi
+            echo "waiting web 200... ($i) got $code"; sleep 2
+          done
+
+      - name: Run contract tests (Schemathesis)
+        env:
+          # 既定の BASE_URL は http://localhost:8080/api
+          # 必要に応じて SPEC_URL を上書き可能
+          BASE_URL: http://localhost:8080/api
+        run: |
+          make contract-check
+
+      - name: Teardown
+        if: always()
+        run: |
+          docker compose logs --no-color > docker-logs.txt || true
+          docker compose down -v
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-logs
+          path: docker-logs.txt
