@@ -17,7 +17,7 @@ cp docker/app.env.example docker/app.env
 make up
 
 # 空の src/ に Laravel を新規作成
-make install
+make init
 
 # アプリケーションキー生成（.env に書き込み）
 make key
