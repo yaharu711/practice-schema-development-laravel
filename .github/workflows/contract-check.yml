@@ -32,10 +32,20 @@ jobs:
         run: |
           docker compose exec -T app composer install --no-interaction --prefer-dist --no-ansi --no-progress
 
+      - name: Fix permissions for storage and cache
+        run: |
+          docker compose exec -T app sh -lc 'chown -R www-data:www-data storage bootstrap/cache && chmod -R ug+rwX storage bootstrap/cache'
+
       - name: Prepare .env and APP_KEY
         run: |
           if [ ! -f src/.env ]; then cp src/.env.example src/.env; fi
           docker compose exec -T app php artisan key:generate
+
+      - name: Clear Laravel caches
+        run: |
+          docker compose exec -T app php artisan config:clear || true
+          docker compose exec -T app php artisan view:clear || true
+          docker compose exec -T app php artisan route:clear || true
 
       - name: Run migrations
         run: |
@@ -44,7 +54,7 @@ jobs:
       - name: Wait for web (HTTP 200)
         run: |
           curl --fail --silent --show-error \
-               --retry 60 --retry-all-errors --retry-delay 2 \
+               --retry 20 --retry-all-errors --retry-delay 2 \
                --connect-timeout 2 --max-time 180 \
                http://localhost:8080/ > /dev/null
 
