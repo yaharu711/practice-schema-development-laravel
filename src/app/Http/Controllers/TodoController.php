@@ -6,17 +6,16 @@ use App\Http\Requests\TodoPatchRequest;
 use App\Http\Requests\TodoStoreRequest;
 use App\Http\Resources\TodoResource;
 use App\Models\Todo;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
 use Illuminate\Support\Str;
-use Illuminate\Http\Request;
 
 class TodoController extends Controller
 {
-    public function index(): JsonResponse
+    public function index()
     {
+        // 一覧はDBの正規化に依存する。データクリーンアップ後は全件返す。
         $items = Todo::orderByDesc('created_at')->get();
-        return response()->json(TodoResource::collection($items));
+        return TodoResource::collection($items);
     }
 
     public function store(TodoStoreRequest $request)
@@ -28,12 +27,17 @@ class TodoController extends Controller
         $todo->completed = $data['completed'] ?? false;
         $todo->save();
 
-        $location = url("/todos/{$todo->id}");
+        // API ルート名から相対URLを生成し、/api プレフィックスを含む Location を返す
+        $location = route('todos.show', ['id' => $todo->id], false); // e.g. "/api/todos/{id}"
         return response()->noContent(Response::HTTP_CREATED)->header('Location', $location);
     }
 
     public function show(string $id)
     {
+        // UUID でない場合も 404 として JSON を返す
+        if (!\Illuminate\Support\Str::isUuid($id)) {
+            return response()->json(['message' => 'Not Found'], Response::HTTP_NOT_FOUND);
+        }
         $todo = Todo::find($id);
         if (!$todo) {
             return response()->json(['message' => 'Not Found'], Response::HTTP_NOT_FOUND);
@@ -43,17 +47,12 @@ class TodoController extends Controller
 
     public function update(string $id, TodoPatchRequest $request)
     {
+        if (!\Illuminate\Support\Str::isUuid($id)) {
+            return response()->json(['message' => 'Not Found'], Response::HTTP_NOT_FOUND);
+        }
         $todo = Todo::find($id);
         if (!$todo) {
             return response()->json(['message' => 'Not Found'], Response::HTTP_NOT_FOUND);
-        }
-
-        // Reject unknown keys when additionalProperties: false
-        $allowed = ['title', 'completed'];
-        $payload = $request->all();
-        $unknown = array_diff(array_keys($payload), $allowed);
-        if (!empty($unknown)) {
-            return response()->json(['message' => 'Bad Request', 'unknown' => array_values($unknown)], 400);
         }
 
         $data = $request->validated();
@@ -70,6 +69,9 @@ class TodoController extends Controller
 
     public function destroy(string $id)
     {
+        if (!\Illuminate\Support\Str::isUuid($id)) {
+            return response()->json(['message' => 'Not Found'], Response::HTTP_NOT_FOUND);
+        }
         $todo = Todo::find($id);
         if (!$todo) {
             return response()->json(['message' => 'Not Found'], Response::HTTP_NOT_FOUND);
@@ -78,4 +80,3 @@ class TodoController extends Controller
         return response()->noContent();
     }
 }
-
