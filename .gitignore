@@ -10,3 +10,8 @@
 /src/.env
 /src/storage
 /src/public/storage
+/.venv
+/reports
+/.hypothesis
+.hypothesis
+.pytest_cache
