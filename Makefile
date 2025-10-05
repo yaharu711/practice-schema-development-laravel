@@ -23,22 +23,19 @@ EXCLUDE_CHECKS ?=use_after_free,ensure_resource_availability,ignored_auth,unsupp
 
 # 契約テスト（ローカル/CI共通）
 contract-check:
+	# - --suppress-health-check=filter_too_much: Stateful での棄却過多による FailedHealthCheck を
+	#   一時的に無視してCI安定化（本質対策はスキーマ/DBデータ調整）。
+	# - --generation-seed: 再現性を上げたい→入力値毎回同じにしたい場合のみ指定（通常は未指定）。
 	python3 -m venv .venv
 	. .venv/bin/activate; python -m pip install --upgrade pip
 	. .venv/bin/activate; python -m pip install schemathesis==$(SCHEMATHESIS_VERSION) hypothesis==$(HYPOTHESIS_VERSION)
 	BASE_URL=$(BASE_URL) \
 		.venv/bin/schemathesis run $(SPEC_URL) --url=$(BASE_URL) \
 		  --checks=all \
-		  $$(test -n "$(EXCLUDE_CHECKS)" && echo --exclude-checks=$(EXCLUDE_CHECKS)) \
-		  # 再現性のためシードを指定可能に。これで入力データが固定になる
-		  $$(test -n "$(HYPOTHESIS_SEED)" && echo --generation-seed=$(HYPOTHESIS_SEED)) \
-		  \
-		  # メモ: CIで StatefuI の前提未成立等により Hypothesis の
-		  # health check(filter_too_much) が発火し、例外で失敗することがある。
-		  # スキーマの制約強化やDBシードで棄却率を下げるのが本筋だが、
-		  # 当面の安定化のため例外を失敗扱いにしない。
+		  $(if $(EXCLUDE_CHECKS),--exclude-checks=$(EXCLUDE_CHECKS)) \
 		  --suppress-health-check=filter_too_much \
-		  --max-examples 50 --generation-unique-inputs
+		  --max-examples 50 --generation-unique-inputs \
+		  $(if $(HYPOTHESIS_SEED),--generation-seed=$(HYPOTHESIS_SEED))
 
 contract-clean:
 	rm -rf .hypothesis reports
